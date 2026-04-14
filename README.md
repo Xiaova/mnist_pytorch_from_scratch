@@ -81,3 +81,27 @@ python infer.py --image ./your_digit.png --ckpt ./checkpoints/mnist_cnn.pt
 2. 把优化器从 Adam 换成 SGD + momentum
 3. 尝试 FashionMNIST 复用同一套代码
 4. 做一个简单可视化：保存每个 epoch 的 loss/acc 曲线
+
+## 8. TensorBoard 可视化与参数对比
+
+训练时会自动写入 TensorBoard 日志，默认目录在 `./runs/<run_name>`。
+
+示例：
+
+```bash
+python train.py --epochs 10 --batch-size 64 --lr 1e-3 --run-name exp_e10_bs64_lr1e-3
+python train.py --epochs 10 --batch-size 128 --lr 1e-3 --run-name exp_e10_bs128_lr1e-3
+python train.py --epochs 10 --batch-size 64 --lr 5e-4 --run-name exp_e10_bs64_lr5e-4
+```
+
+启动 TensorBoard：
+
+```bash
+tensorboard --logdir runs
+```
+
+在网页中可以查看：
+- `batch/train_loss`（按 batch 的训练损失）
+- `epoch/train_loss`、`epoch/val_loss`、`epoch/test_loss`
+- `epoch/train_acc`、`epoch/val_acc`、`epoch/test_acc`
+- `HPARAMS` 页面中的超参数对比（epochs / batch_size / lr / val_ratio / seed）
