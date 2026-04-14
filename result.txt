@@ -1,0 +1,119 @@
+(base) C:\Users\34587>conda activate dl_mnist
+
+(dl_mnist) C:\Users\34587>D:
+
+(dl_mnist) D:\>cd Deep_learning\mnist_pytorch_from_scratch
+
+(dl_mnist) D:\Deep_learning\mnist_pytorch_from_scratch>python train.py --epochs 5 --batch-size 64 --lr 1e-3
+Using device: cpu
+Epoch 01/5 | train_loss=0.1661 train_acc=0.9487 | test_loss=0.0381 test_acc=0.9869
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 02/5 | train_loss=0.0604 train_acc=0.9820 | test_loss=0.0323 test_acc=0.9877
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 03/5 | train_loss=0.0422 train_acc=0.9867 | test_loss=0.0281 test_acc=0.9898
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 04/5 | train_loss=0.0342 train_acc=0.9891 | test_loss=0.0232 test_acc=0.9924
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 05/5 | train_loss=0.0282 train_acc=0.9913 | test_loss=0.0270 test_acc=0.9913
+Best test accuracy: 0.9924
+
+(dl_mnist) D:\Deep_learning\mnist_pytorch_from_scratch>python train.py --epochs 6 --batch-size 64 --lr 1e-3
+Using device: cpu
+Epoch 01/6 | train_loss=0.1678 train_acc=0.9479 | test_loss=0.0413 test_acc=0.9870
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 02/6 | train_loss=0.0579 train_acc=0.9821 | test_loss=0.0341 test_acc=0.9888
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 03/6 | train_loss=0.0431 train_acc=0.9870 | test_loss=0.0300 test_acc=0.9906
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 04/6 | train_loss=0.0333 train_acc=0.9898 | test_loss=0.0334 test_acc=0.9898
+Epoch 05/6 | train_loss=0.0276 train_acc=0.9911 | test_loss=0.0227 test_acc=0.9923
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 06/6 | train_loss=0.0237 train_acc=0.9928 | test_loss=0.0235 test_acc=0.9925
+Saved best model to: checkpoints\mnist_cnn.pt
+Best test accuracy: 0.9925
+
+
+(dl_mnist) D:\Deep_learning\mnist_pytorch_from_scratch>python train.py --epochs 10 --batch-size 64 --lr 1e-3
+Using device: cpu
+Epoch 01/10 | train_loss=0.1674 train_acc=0.9487 | test_loss=0.0416 test_acc=0.9858
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 02/10 | train_loss=0.0576 train_acc=0.9818 | test_loss=0.0433 test_acc=0.9859
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 03/10 | train_loss=0.0443 train_acc=0.9867 | test_loss=0.0346 test_acc=0.9900
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 04/10 | train_loss=0.0328 train_acc=0.9896 | test_loss=0.0313 test_acc=0.9905
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 05/10 | train_loss=0.0275 train_acc=0.9910 | test_loss=0.0326 test_acc=0.9900
+Epoch 06/10 | train_loss=0.0230 train_acc=0.9926 | test_loss=0.0296 test_acc=0.9919
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 07/10 | train_loss=0.0213 train_acc=0.9934 | test_loss=0.0273 test_acc=0.9917
+Epoch 08/10 | train_loss=0.0163 train_acc=0.9945 | test_loss=0.0286 test_acc=0.9919
+Epoch 09/10 | train_loss=0.0155 train_acc=0.9947 | test_loss=0.0300 test_acc=0.9905
+Epoch 10/10 | train_loss=0.0128 train_acc=0.9959 | test_loss=0.0288 test_acc=0.9920
+Saved best model to: checkpoints\mnist_cnn.pt
+Best test accuracy: 0.9920
+
+(dl_mnist) D:\Deep_learning\mnist_pytorch_from_scratch>python train.py --epochs 18 --batch-size 64 --lr 1e-3
+Using device: cpu
+Epoch 01/18 | train_loss=0.1639 train_acc=0.9501 | test_loss=0.0432 test_acc=0.9850
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 02/18 | train_loss=0.0588 train_acc=0.9821 | test_loss=0.0319 test_acc=0.9893
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 03/18 | train_loss=0.0424 train_acc=0.9869 | test_loss=0.0345 test_acc=0.9878
+Epoch 04/18 | train_loss=0.0337 train_acc=0.9901 | test_loss=0.0257 test_acc=0.9916
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 05/18 | train_loss=0.0280 train_acc=0.9910 | test_loss=0.0215 test_acc=0.9934
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 06/18 | train_loss=0.0228 train_acc=0.9926 | test_loss=0.0323 test_acc=0.9903
+Epoch 07/18 | train_loss=0.0201 train_acc=0.9932 | test_loss=0.0219 test_acc=0.9939
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 08/18 | train_loss=0.0174 train_acc=0.9944 | test_loss=0.0261 test_acc=0.9925
+Epoch 09/18 | train_loss=0.0145 train_acc=0.9953 | test_loss=0.0266 test_acc=0.9926
+Epoch 10/18 | train_loss=0.0141 train_acc=0.9954 | test_loss=0.0305 test_acc=0.9918
+Epoch 11/18 | train_loss=0.0127 train_acc=0.9957 | test_loss=0.0359 test_acc=0.9917
+Epoch 12/18 | train_loss=0.0128 train_acc=0.9958 | test_loss=0.0301 test_acc=0.9930
+Epoch 13/18 | train_loss=0.0104 train_acc=0.9965 | test_loss=0.0239 test_acc=0.9932
+Epoch 14/18 | train_loss=0.0104 train_acc=0.9966 | test_loss=0.0279 test_acc=0.9934
+Epoch 15/18 | train_loss=0.0089 train_acc=0.9969 | test_loss=0.0305 test_acc=0.9924
+Epoch 16/18 | train_loss=0.0088 train_acc=0.9969 | test_loss=0.0274 test_acc=0.9929
+Epoch 17/18 | train_loss=0.0082 train_acc=0.9973 | test_loss=0.0326 test_acc=0.9922
+Epoch 18/18 | train_loss=0.0075 train_acc=0.9976 | test_loss=0.0297 test_acc=0.9939
+Best test accuracy: 0.9939
+
+(dl_mnist) D:\Deep_learning\mnist_pytorch_from_scratch>python train.py --epochs 5 --batch-size 64 --lr 5e-4
+Using device: cpu
+Epoch 01/5 | train_loss=0.2036 train_acc=0.9370 | test_loss=0.0477 test_acc=0.9835
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 02/5 | train_loss=0.0660 train_acc=0.9794 | test_loss=0.0375 test_acc=0.9879
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 03/5 | train_loss=0.0474 train_acc=0.9856 | test_loss=0.0327 test_acc=0.9894
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 04/5 | train_loss=0.0380 train_acc=0.9880 | test_loss=0.0290 test_acc=0.9902
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 05/5 | train_loss=0.0314 train_acc=0.9899 | test_loss=0.0294 test_acc=0.9908
+Saved best model to: checkpoints\mnist_cnn.pt
+Best test accuracy: 0.9908
+
+(dl_mnist) D:\Deep_learning\mnist_pytorch_from_scratch>python train.py --epochs 5 --batch-size 64 --lr 5e-3
+Using device: cpu
+Epoch 01/5 | train_loss=0.2265 train_acc=0.9306 | test_loss=0.0869 test_acc=0.9733
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 02/5 | train_loss=0.1183 train_acc=0.9644 | test_loss=0.1010 test_acc=0.9674
+Epoch 03/5 | train_loss=0.1051 train_acc=0.9687 | test_loss=0.0683 test_acc=0.9782
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 04/5 | train_loss=0.0950 train_acc=0.9711 | test_loss=0.0755 test_acc=0.9797
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 05/5 | train_loss=0.0899 train_acc=0.9732 | test_loss=0.0629 test_acc=0.9819
+Saved best model to: checkpoints\mnist_cnn.pt
+Best test accuracy: 0.9819
+
+(dl_mnist) D:\Deep_learning\mnist_pytorch_from_scratch>python train.py --epochs 5 --batch-size 64 --lr 5e-2
+Using device: cpu
+Epoch 01/5 | train_loss=2.7075 train_acc=0.1063 | test_loss=2.3047 test_acc=0.1009
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 02/5 | train_loss=2.3053 train_acc=0.1071 | test_loss=2.3038 test_acc=0.0980
+Epoch 03/5 | train_loss=2.3060 train_acc=0.1036 | test_loss=2.3065 test_acc=0.1135
+Saved best model to: checkpoints\mnist_cnn.pt
+Epoch 04/5 | train_loss=2.3060 train_acc=0.1060 | test_loss=2.3057 test_acc=0.1135
+Epoch 05/5 | train_loss=2.3054 train_acc=0.1074 | test_loss=2.3045 test_acc=0.1135
+Best test accuracy: 0.1135
