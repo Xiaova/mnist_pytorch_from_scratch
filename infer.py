@@ -1,23 +1,28 @@
 ﻿import argparse
+from typing import Optional
 
 import torch
 from PIL import Image, ImageOps, ImageStat
 from torchvision import transforms
 
-from model import MNISTNet
+from model import build_model
 
 
-# 解析推理参数：输入图片路径、权重路径、设备、输出前 k 个类别概率
+# 推理参数：图片路径、checkpoint、模型类型、设备、top-k
+# --model auto 时会尽量从 checkpoint 中自动识别
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Inference for MNIST image")
     parser.add_argument("--image", type=str, required=True, help="Path to image")
     parser.add_argument("--ckpt", type=str, default="./checkpoints/mnist_cnn.pt")
+    parser.add_argument("--model", type=str, default="auto", choices=["auto", "cnn", "mlp"])
     parser.add_argument("--device", type=str, default="auto", choices=["auto", "cpu", "cuda"])
     parser.add_argument("--topk", type=int, default=3)
     return parser.parse_args()
 
 
-# 与训练脚本一致的设备逻辑：默认 auto，优先 GPU，否则 CPU
+# 设备选择逻辑与 train.py 保持一致
+
 def choose_device(device_arg: str) -> torch.device:
     if device_arg == "cpu":
         return torch.device("cpu")
@@ -29,14 +34,21 @@ def choose_device(device_arg: str) -> torch.device:
 
 
 # 兼容两种 checkpoint 格式：
-# 1) 直接保存 state_dict
-# 2) 保存字典，里面包含 model_state_dict
+# 1) 直接 state_dict
+# 2) dict，里面有 model_state_dict / model_name
+
 def load_checkpoint(path: str, device: torch.device):
     checkpoint = torch.load(path, map_location=device)
-    if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
-        return checkpoint["model_state_dict"]
-    return checkpoint
 
+    if isinstance(checkpoint, dict):
+        state_dict = checkpoint.get("model_state_dict", checkpoint)
+        model_name = checkpoint.get("model_name")
+        return state_dict, model_name
+
+    return checkpoint, None
+
+
+# Otsu 阈值法：自动找一个阈值，把灰度图变成二值图
 
 def otsu_threshold(gray_image: Image.Image) -> int:
     hist = gray_image.histogram()
@@ -71,27 +83,29 @@ def otsu_threshold(gray_image: Image.Image) -> int:
     return threshold
 
 
+# 把任意手写数字图，预处理成接近 MNIST 风格的 28x28
+
 def preprocess_to_mnist(image_path: str) -> Image.Image:
-    # 1) 转灰度 + 拉伸对比度，减弱拍照光照影响
+    # 1) 转灰度 + 自动拉伸对比度
     gray = ImageOps.grayscale(Image.open(image_path))
     gray = ImageOps.autocontrast(gray)
 
-    # 2) 自动反色：若整体偏亮，通常是白底黑字，先反色为黑底白字
+    # 2) 自动反色：如果图整体太亮，通常是白底黑字，反转成黑底白字
     mean_intensity = ImageStat.Stat(gray).mean[0]
     if mean_intensity > 127:
         gray = ImageOps.invert(gray)
 
-    # 3) Otsu 二值化，得到清晰前景
+    # 3) Otsu 二值化
     threshold = otsu_threshold(gray)
     binary = gray.point(lambda p: 255 if p >= threshold else 0)
 
-    # 4) 取前景外接框并裁剪
+    # 4) 找前景外接框并裁剪
     bbox = binary.getbbox()
     if bbox is None:
         raise RuntimeError("No digit foreground found. Please provide a clearer digit image.")
     digit = binary.crop(bbox)
 
-    # 5) 等比缩放到 20x20 内，再居中填充到 28x28（更贴近 MNIST）
+    # 5) 等比缩放到 20x20 以内，再居中贴到 28x28 画布
     target_inner = 20
     w, h = digit.size
     scale = target_inner / max(w, h)
@@ -106,17 +120,29 @@ def preprocess_to_mnist(image_path: str) -> Image.Image:
     return canvas
 
 
+# 决定实际用哪个模型：优先用户手动指定，否则从 checkpoint 自动识别
+
+def infer_model_name(cli_model: str, ckpt_model: Optional[str]) -> str:
+    if cli_model != "auto":
+        return cli_model
+    if ckpt_model is not None:
+        return ckpt_model
+
+    # 老 checkpoint 没写 model_name 时，默认回退到 cnn
+    return "cnn"
+
+
 def main():
     args = parse_args()
     device = choose_device(args.device)
 
-    # 1) 构建模型并加载参数
-    model = MNISTNet().to(device)
-    state_dict = load_checkpoint(args.ckpt, device)
+    state_dict, ckpt_model_name = load_checkpoint(args.ckpt, device)
+    model_name = infer_model_name(args.model, ckpt_model_name)
+
+    model = build_model(model_name).to(device)
     model.load_state_dict(state_dict)
     model.eval()
 
-    # 2) 推理前预处理：转张量 + 标准化（几何和灰度处理在 preprocess_to_mnist 中完成）
     transform = transforms.Compose(
         [
             transforms.ToTensor(),
@@ -125,18 +151,23 @@ def main():
     )
 
     image = preprocess_to_mnist(args.image)
-    x = transform(image).unsqueeze(0).to(device)  # 增加 batch 维度 -> [1, 1, 28, 28]
 
-    # 3) 前向推理并转概率
+    # unsqueeze(0) 在最前面加一个 batch 维度：
+    # [1, 28, 28] -> [1, 1, 28, 28]
+    x = transform(image).unsqueeze(0).to(device)
+
     with torch.no_grad():
         logits = model(x)
         probs = torch.softmax(logits, dim=1)
+
+        # topk 限制在 [1, 类别数] 范围内，避免参数越界
         topk = max(1, min(args.topk, probs.size(1)))
         top_probs, top_indices = torch.topk(probs, k=topk, dim=1)
 
-    # 4) 打印 top-k 结果，便于你观察模型置信度
     pred = top_indices[0, 0].item()
     confidence = top_probs[0, 0].item()
+
+    print(f"Model: {model_name}")
     print(f"Predicted digit: {pred} (confidence={confidence:.4f})")
     print("Top-k probabilities:")
     for rank in range(topk):

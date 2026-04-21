@@ -1,0 +1,42 @@
+Conv1 kernel auto-explanation (template matching)
+Pattern labels: horizontal_edge, vertical_edge, diagonal_edge, center_point
+
+Per-kernel summary:
+  kernel_00: pattern=center_point, confidence=0.5994, polarity=negative
+  kernel_01: pattern=diagonal_edge, confidence=0.6932, polarity=positive
+  kernel_02: pattern=diagonal_edge, confidence=0.4575, polarity=positive
+  kernel_03: pattern=diagonal_edge, confidence=0.6681, polarity=negative
+  kernel_04: pattern=center_point, confidence=0.3847, polarity=negative
+  kernel_05: pattern=diagonal_edge, confidence=0.5879, polarity=positive
+  kernel_06: pattern=vertical_edge, confidence=0.6530, polarity=positive
+  kernel_07: pattern=diagonal_edge, confidence=0.7093, polarity=positive
+  kernel_08: pattern=vertical_edge, confidence=0.2887, polarity=positive
+  kernel_09: pattern=diagonal_edge, confidence=0.5937, polarity=positive
+  kernel_10: pattern=vertical_edge, confidence=0.6572, polarity=positive
+  kernel_11: pattern=horizontal_edge, confidence=0.4720, polarity=positive
+  kernel_12: pattern=diagonal_edge, confidence=0.5766, polarity=positive
+  kernel_13: pattern=diagonal_edge, confidence=0.2407, polarity=negative
+  kernel_14: pattern=center_point, confidence=0.3449, polarity=negative
+  kernel_15: pattern=horizontal_edge, confidence=0.8173, polarity=positive
+  kernel_16: pattern=horizontal_edge, confidence=0.1540, polarity=negative
+  kernel_17: pattern=center_point, confidence=0.1664, polarity=negative
+  kernel_18: pattern=vertical_edge, confidence=0.6702, polarity=negative
+  kernel_19: pattern=diagonal_edge, confidence=0.6444, polarity=positive
+  kernel_20: pattern=vertical_edge, confidence=0.5896, polarity=positive
+  kernel_21: pattern=vertical_edge, confidence=0.4739, polarity=negative
+  kernel_22: pattern=diagonal_edge, confidence=0.5037, polarity=negative
+  kernel_23: pattern=diagonal_edge, confidence=0.3175, polarity=negative
+  kernel_24: pattern=center_point, confidence=0.5084, polarity=positive
+  kernel_25: pattern=horizontal_edge, confidence=0.7413, polarity=positive
+  kernel_26: pattern=center_point, confidence=0.6668, polarity=positive
+  kernel_27: pattern=center_point, confidence=0.5600, polarity=negative
+  kernel_28: pattern=diagonal_edge, confidence=0.6951, polarity=positive
+  kernel_29: pattern=horizontal_edge, confidence=0.5023, polarity=positive
+  kernel_30: pattern=vertical_edge, confidence=0.6162, polarity=negative
+  kernel_31: pattern=diagonal_edge, confidence=0.3907, polarity=negative
+
+Pattern distribution:
+  horizontal_edge: 5
+  vertical_edge: 7
+  diagonal_edge: 13
+  center_point: 7

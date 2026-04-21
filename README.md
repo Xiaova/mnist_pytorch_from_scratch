@@ -1,107 +1,222 @@
-﻿# MNIST PyTorch 入门项目
+﻿# MNIST PyTorch 入门项目（MLP vs CNN 对比）
 
-这个项目是一个可运行的手写数字分类工程，目标是帮助你把深度学习基础概念落到代码上。
+这个项目是一个可运行的手写数字分类工程，目标是帮助你把深度学习基础概念落到代码上，并支持你直接做 `MLP` 与 `CNN` 在图像任务上的对比实验。
 
 ## 1. 你会学到什么
 
 1. 数据集与数据加载
 - `torchvision.datasets.MNIST`
-- `DataLoader` 的 `batch_size` 和 `shuffle`
+- `DataLoader` 的 `batch_size`、`shuffle`、`num_workers`
 
 2. 图像预处理
 - `ToTensor()`
 - `Normalize((0.1307,), (0.3081,))`
 
-3. 模型搭建
-- 使用 `nn.Module` 定义 CNN
-- 卷积层、激活函数、池化层、全连接层、Dropout
+3. 模型搭建与对比
+- `MNISTMLP`：全连接网络，输入展平后分类
+- `MNISTCNN`：卷积网络，利用局部感受野与权重共享
+- 通过统一接口 `build_model("mlp" | "cnn")` 切换模型
 
-4. 训练循环
-- 前向传播 `model(images)`
-- 损失函数 `CrossEntropyLoss`
-- 反向传播 `loss.backward()`
-- 参数更新 `optimizer.step()`
+4. 训练与评估
+- 前向传播、反向传播、参数更新
+- train/val/test 全流程指标记录
+- 混淆矩阵与每类准确率
 
-5. 评估与泛化
-- `model.train()` 与 `model.eval()`
-- `torch.no_grad()`
-- 准确率计算
+5. 实验意识
+- 对比模型结构差异带来的效果变化
+- 对比超参数（`lr`、`batch_size`、`dropout`）对收敛和精度的影响
 
-6. 模型保存与加载
-- `torch.save(model.state_dict(), path)`
-- `model.load_state_dict(...)`
-
-7. 实验意识
-- 学会改超参数：`lr`, `batch_size`, `epochs`
-- 对比不同设置下的准确率变化
+6. 卷积特征图可视化
+- 查看第一层卷积核对输入图片提取出的 32 张特征图
+- 单独保存某一张特征图，观察某个卷积核关注的笔画、边缘或局部形状
 
 ## 2. 项目结构
 
-- `model.py`：CNN 模型定义
-- `train.py`：训练和测试主脚本
-- `infer.py`：对单张图片推理
-- `requirements.txt`：依赖列表
+- `model.py`：`MNISTMLP`、`MNISTCNN` 与 `build_model`
+- `train.py`：训练、评估、保存最佳 checkpoint、对比实验输出
+- `infer.py`：单张图片推理（支持自动识别 checkpoint 对应模型）
+- `visualize_conv1.py`：第一层卷积特征图可视化
+- `checkpoints/`：模型权重输出目录
+- `runs/`：TensorBoard 日志目录
 
-## 3. 环境安装
+## 3. 环境安装（按仓库规范）
 
-```bash
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements.txt
-```
-
-## 4. 开始训练
+默认在 Anaconda 环境 `dl_mnist` 中运行。
 
 ```bash
-python train.py --epochs 5 --batch-size 64 --lr 1e-3
+conda activate dl_mnist
 ```
 
-训练完成后，最佳模型会保存在：
+如需安装依赖，优先使用 conda（pip 作为补充）：
+
+```bash
+conda install pytorch torchvision tensorboard pillow -c pytorch
+# 备选：pip install -r requirements.txt
+```
+
+## 4. 训练用法
+
+### 4.1 训练单个模型
+
+训练 CNN（默认）：
+
+```bash
+conda activate dl_mnist
+python train.py --model cnn --epochs 5 --batch-size 64 --lr 1e-3 --device cpu
+```
+
+训练 MLP：
+
+```bash
+conda activate dl_mnist
+python train.py --model mlp --epochs 5 --batch-size 64 --lr 1e-3 --device cpu
+```
+
+### 4.2 一键做 MLP vs CNN 对比实验（推荐）
+
+```bash
+conda activate dl_mnist
+python train.py --compare --epochs 5 --batch-size 64 --lr 1e-3 --device cpu
+```
+
+运行后会依次训练 `MLP` 和 `CNN`，并在终端打印对比表：
+- 参数量 `params`
+- 最佳验证准确率 `best_val_acc`
+- 最终测试准确率 `test_acc`
+- 最终测试损失 `test_loss`
+- `Delta test_acc (cnn - mlp)`
+
+### 4.3 模型保存规则
+
+`--save-path` 默认是：
+
+```text
+./checkpoints/mnist_{model}.pt
+```
+
+因此默认会得到：
+- `./checkpoints/mnist_mlp.pt`
 - `./checkpoints/mnist_cnn.pt`
+
+checkpoint 中包含：
+- `model_state_dict`
+- `model_name`
+- `epoch`
+- `val_acc`
+- `args`
 
 ## 5. 单张图片推理
 
-准备一张数字图片（建议黑底白字或灰度图），然后运行：
+准备一张数字图片（建议黑底白字或灰度图）：
 
 ```bash
-python infer.py --image ./your_digit.png --ckpt ./checkpoints/mnist_cnn.pt
+conda activate dl_mnist
+python infer.py --image ./inference_images/my_9.jpg --ckpt ./checkpoints/mnist_cnn.pt --model auto
 ```
 
-## 6. 建议你这样练习
+参数说明：
+- `--model auto`：优先从 checkpoint 的 `model_name` 自动识别（推荐）
+- `--model cnn|mlp`：手动指定模型类型
+- `--topk`：输出前 k 个类别概率
 
-1. 先不改代码，完整跑通一次。
-2. 把 `epochs` 从 5 改到 10，观察 test accuracy 变化。
-3. 把 `lr` 从 `1e-3` 改到 `5e-4`，比较收敛速度。
-4. 在 `model.py` 里把卷积通道数改大或改小，比较效果和训练速度。
-5. 写下每次实验结果，形成自己的实验记录表。
-
-## 7. 进阶方向
-
-1. 加入学习率调度器 `StepLR` 或 `CosineAnnealingLR`
-2. 把优化器从 Adam 换成 SGD + momentum
-3. 尝试 FashionMNIST 复用同一套代码
-4. 做一个简单可视化：保存每个 epoch 的 loss/acc 曲线
-
-## 8. TensorBoard 可视化与参数对比
-
-训练时会自动写入 TensorBoard 日志，默认目录在 `./runs/<run_name>`。
-
-示例：
+示例（MLP 权重）：
 
 ```bash
-python train.py --epochs 10 --batch-size 64 --lr 1e-3 --run-name exp_e10_bs64_lr1e-3
-python train.py --epochs 10 --batch-size 128 --lr 1e-3 --run-name exp_e10_bs128_lr1e-3
-python train.py --epochs 10 --batch-size 64 --lr 5e-4 --run-name exp_e10_bs64_lr5e-4
+conda activate dl_mnist
+python infer.py --image ./inference_images/my_2.jpg --ckpt ./checkpoints/mnist_mlp.pt --model auto --topk 3
 ```
 
-启动 TensorBoard：
+## 6. TensorBoard 可视化与实验对比
+
+训练时会自动写入日志到 `./runs/<run_name>`。
 
 ```bash
+conda activate dl_mnist
 tensorboard --logdir runs
 ```
 
-在网页中可以查看：
-- `batch/train_loss`（按 batch 的训练损失）
+在网页中可查看：
+- `batch/train_loss`
 - `epoch/train_loss`、`epoch/val_loss`、`epoch/test_loss`
 - `epoch/train_acc`、`epoch/val_acc`、`epoch/test_acc`
-- `HPARAMS` 页面中的超参数对比（epochs / batch_size / lr / val_ratio / seed）
+- `test/class_acc/*`
+- `HPARAMS` 对比页面（含 model / lr / batch_size / dropout 等）
+
+## 7. 第一层卷积特征图可视化
+
+训练好的 CNN 第一层是 `Conv2d(1, 32, kernel_size=3, padding=1)`。
+
+它会把一张 `1 x 28 x 28` 的灰度图片变成 `32 x 28 x 28` 的特征图。可以把这 32 张特征图理解为：32 个不同的卷积核分别从同一张图片里观察到的局部模式，例如边缘、笔画方向、拐角、亮暗变化等。
+
+加载训练好的 CNN checkpoint，默认从 MNIST 测试集中抽取第 0 张图片，查看第一层卷积核提取出的特征图：
+
+```bash
+conda activate dl_mnist
+python visualize_conv1.py --ckpt ./checkpoints/mnist_cnn.pt --device cpu
+```
+
+默认会保存到 `./runs/conv1_visualization/`：
+- `conv1_kernels.png`：第一层 32 个 `3x3` 卷积核的可视化
+- `conv1_kernel_explanations.txt`：卷积核自动解释摘要（需开启 `--auto-explain`）
+- `sample_00_label_7_idx_0_input.png`：某个样本的输入图（文件名会随样本变化）
+- `sample_00_label_7_idx_0_all_feature_maps.png`：该样本对应的 32 张特征图网格
+- `sample_00_label_7_idx_0_feature_map_00.png`：该样本第 1 张特征图（可用 `--feature-index` 切换）
+- `multi_samples_feature_map_00_summary.png`：多样本汇总图（上排输入图，下排对应特征图）
+
+终端会打印当前使用的是哪张 MNIST 图片，例如：
+
+```text
+Input source: MNIST test sample #0, label=7
+Conv1 output shape: (32, 28, 28)
+```
+
+终端还会打印第一层卷积核权重（`conv1.weight`）以及其形状：
+
+```text
+Conv1 kernel weights shape: (32, 1, 3, 3)
+Conv1 kernels tensor:
+tensor(...)
+```
+
+如需开启卷积核自动解释模式（按模板匹配为 `horizontal_edge` / `vertical_edge` / `diagonal_edge` / `center_point`），可加：
+
+```bash
+conda activate dl_mnist
+python visualize_conv1.py --auto-explain --num-samples 6 --feature-index 1 --device cpu
+```
+
+看图时可以这样理解：
+- 越亮的位置，说明这个卷积核在该区域响应越强
+- 越暗的位置，说明这个卷积核在该区域响应越弱
+- 不同特征图亮起来的位置不同，代表不同卷积核关注的局部模式不同
+
+如需一次展示多张不同数字，直接设置 `--num-samples`：
+
+```bash
+conda activate dl_mnist
+python visualize_conv1.py --sample-index 0 --num-samples 6 --feature-index 5 --device cpu
+```
+
+默认会尽量选不同数字（不同 label）。如果你允许重复数字，可加 `--allow-duplicate-labels`。
+
+如需换起始位置或数据划分，可修改 `--sample-index` 和 `--split`：
+
+```bash
+conda activate dl_mnist
+python visualize_conv1.py --split test --sample-index 12 --ckpt ./checkpoints/mnist_cnn.pt --device cpu
+
+conda activate dl_mnist
+python visualize_conv1.py --split train --sample-index 100 --ckpt ./checkpoints/mnist_cnn.pt --device cpu
+```
+
+## 8. 建议实验步骤
+
+1. 固定超参数，先跑一次 `--compare`，记录 MLP 与 CNN 差异。
+2. 只改 `dropout`（如 `0.1 / 0.3 / 0.5`），观察两类模型的抗过拟合变化。
+3. 只改 `optimizer`（`adam` vs `sgd`），观察收敛速度与最终精度。
+4. 用同一张自定义手写图分别喂给两个模型推理，比较置信度分布。
+
+## 9. 设备说明
+
+- 代码默认对 CPU 友好，可在无 NVIDIA GPU 机器上直接运行。
+- 若你要做更大规模或更快的实验，可使用 GPU（如租用云服务器）；在 CPU 下训练耗时会更长。
