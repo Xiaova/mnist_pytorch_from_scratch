@@ -3,29 +3,43 @@ import torch.nn as nn
 
 
 # CNN 版本：更擅长图像任务（利用局部卷积核提取空间特征）
-class MNISTCNN(nn.Module):
+class CIFAR10CNN(nn.Module):
     # dropout: float = 0.3 是 Python 的“类型标注 + 默认参数”写法
     # 含义：参数 dropout 预期是 float，不传时默认 0.3
     def __init__(self, dropout: float = 0.3) -> None:
-        super().__init__()#调用父类的构造函数，父类：nn.Module
+        super().__init__()  # 调用父类的构造函数，父类：nn.Module
 
-        # nn.Sequential([...]) 可以把多层按顺序“串起来”
-        # 输入形状 [B, 1, 28, 28] -> 输出形状 [B, 64, 7, 7]
+        # 更深的卷积主干更适合 CIFAR10 这类彩色自然图像。
+        # 输入形状 [B, 3, 32, 32] -> 输出形状 [B, 256, 4, 4]
         self.features = nn.Sequential(
-            nn.Conv2d(1, 32, kernel_size=3, padding=1),
-            nn.BatchNorm2d(32),
+            nn.Conv2d(3, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 64, kernel_size=3, padding=1),
+            nn.BatchNorm2d(64),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=2),
-            nn.Conv2d(32, 64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
+            nn.Conv2d(64, 128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(128, 128, kernel_size=3, padding=1),
+            nn.BatchNorm2d(128),
+            nn.ReLU(inplace=True),
+            nn.MaxPool2d(kernel_size=2),
+            nn.Conv2d(128, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(256, 256, kernel_size=3, padding=1),
+            nn.BatchNorm2d(256),
             nn.ReLU(inplace=True),
             nn.MaxPool2d(kernel_size=2),
         )
 
-        # 分类头：把特征图展平后，映射到 10 类（0-9）
+        # 自适应池化让分类头更稳健，也减少全连接层参数量。
         self.classifier = nn.Sequential(
+            nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten(),
-            nn.Linear(64 * 7 * 7, 128),
+            nn.Linear(256, 128),
             nn.ReLU(inplace=True),
             nn.Dropout(p=dropout),
             nn.Linear(128, 10),
@@ -50,50 +64,15 @@ class MNISTCNN(nn.Module):
         return x
 
 
-# MLP 版本：先把图片展平，再通过全连接层分类
-class MNISTMLP(nn.Module):
-    def __init__(self, dropout: float = 0.3) -> None:
-        super().__init__()
+# 工厂函数：保留接口形式，但仅支持 cnn
 
-        # 输入 [B, 1, 28, 28] -> Flatten 后 [B, 784]
-        self.net = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(28 * 28, 256),
-            nn.ReLU(inplace=True),
-            nn.Dropout(p=dropout),
-            nn.Linear(256, 128),
-            nn.ReLU(inplace=True),
-            nn.Dropout(p=dropout),
-            nn.Linear(128, 10),
-        )
-
-        self._init_weights()
-
-    def _init_weights(self) -> None:
-        for module in self.modules():
-            if isinstance(module, nn.Linear):
-                nn.init.kaiming_normal_(module.weight, nonlinearity="relu")
-                if module.bias is not None:
-                    nn.init.zeros_(module.bias)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        return self.net(x)
-
-
-# 工厂函数：根据字符串构建对应模型
-# 这样 train/infer 不用写很多 if-else 分散在各处
-
-def build_model(model_name: str, dropout: float = 0.3) -> nn.Module:
+def build_model(model_name: str = "cnn", dropout: float = 0.3) -> nn.Module:
     # .lower() 把字符串转小写，避免用户传 "CNN" / "Cnn" 这种大小写差异
-    name = model_name.lower()
-    if name == "cnn":
-        return MNISTCNN(dropout=dropout)
-    if name == "mlp":
-        return MNISTMLP(dropout=dropout)
-
-    # f"...{var}..." 是 Python f-string：字符串里直接嵌变量
-    raise ValueError(f"Unknown model: {model_name}. Expected one of: cnn, mlp")
+    if model_name.lower() != "cnn":
+        raise ValueError(f"Unknown model: {model_name}. This project now supports only: cnn")
+    return CIFAR10CNN(dropout=dropout)
 
 
-# 向后兼容：旧代码如果还在 from model import MNISTNet，也不会报错
-MNISTNet = MNISTCNN
+# 向后兼容别名（避免旧导入路径报错）
+MNISTCNN = CIFAR10CNN
+MNISTNet = CIFAR10CNN

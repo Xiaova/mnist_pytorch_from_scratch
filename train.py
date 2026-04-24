@@ -4,7 +4,7 @@ from pathlib import Path
 
 import torch
 from torch import nn
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader, Subset, random_split
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import datasets, transforms
 
@@ -12,33 +12,33 @@ from model import build_model
 
 
 # 解析命令行参数
-# 例如：python train.py --compare --epochs 5 --device cpu
+# 例如：python train.py --epochs 5 --device cpu
 # parser.add_argument(...) 会定义一个参数；最终用 args.xxx 读取
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Train MLP/CNN on MNIST")
-    parser.add_argument("--epochs", type=int, default=5)
-    parser.add_argument("--batch-size", type=int, default=64)
-    parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--min-lr", type=float, default=1e-5)
+    parser = argparse.ArgumentParser(description="Train CNN on CIFAR10")
+    parser.add_argument("--epochs", type=int, default=50)
+    parser.add_argument("--batch-size", type=int, default=128)
+    parser.add_argument("--lr", type=float, default=0.1)
+    parser.add_argument("--min-lr", type=float, default=1e-4)
     parser.add_argument("--data-dir", type=str, default="./data")
-    parser.add_argument("--save-path", type=str, default="./checkpoints/mnist_{model}.pt")
+    parser.add_argument("--save-path", type=str, default="./checkpoints/cifar10_cnn.pt")
     parser.add_argument("--val-ratio", type=float, default=0.1)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--log-dir", type=str, default="./runs")
     parser.add_argument("--run-name", type=str, default="")
     parser.add_argument("--device", type=str, default="auto", choices=["auto", "cpu", "cuda"])
-    parser.add_argument("--optimizer", type=str, default="adam", choices=["adam", "adamw", "sgd"])
-    parser.add_argument("--weight-decay", type=float, default=0.0)
-    parser.add_argument("--scheduler", type=str, default="none", choices=["none", "step", "cosine"])
+    parser.add_argument("--optimizer", type=str, default="sgd", choices=["adam", "adamw", "sgd"])
+    parser.add_argument("--weight-decay", type=float, default=5e-4)
+    parser.add_argument("--scheduler", type=str, default="cosine", choices=["none", "step", "cosine"])
     parser.add_argument("--step-size", type=int, default=3)
     parser.add_argument("--gamma", type=float, default=0.5)
-    parser.add_argument("--label-smoothing", type=float, default=0.0)
+    parser.add_argument("--label-smoothing", type=float, default=0.1)
     parser.add_argument("--grad-clip", type=float, default=0.0)
-    parser.add_argument("--dropout", type=float, default=0.3)
-    parser.add_argument("--model", type=str, default="cnn", choices=["cnn", "mlp"])
-    parser.add_argument("--compare", action="store_true", help="Train/evaluate both MLP and CNN")
+    parser.add_argument("--dropout", type=float, default=0.4)
+    parser.add_argument("--momentum", type=float, default=0.9)
+    parser.add_argument("--no-aug", action="store_true")
     parser.add_argument("--deterministic", action="store_true")
     return parser.parse_args()
 
@@ -66,23 +66,45 @@ def make_loaders(
     seed: int,
     num_workers: int,
     pin_memory: bool,
+    use_aug: bool,
 ):
     if not (0.0 < val_ratio < 1.0):
         raise ValueError("--val-ratio must be in (0, 1).")
 
-    # transforms.Compose([...])：把多个预处理按顺序拼起来
-    transform = transforms.Compose(
+    train_transform_steps = []
+    if use_aug:
+        train_transform_steps.extend(
+            [
+                transforms.RandomCrop(32, padding=4),
+                transforms.RandomHorizontalFlip(),
+            ]
+        )
+
+    train_transform = transforms.Compose(
+        train_transform_steps
+        + [
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)),
+        ]
+    )
+    eval_transform = transforms.Compose(
         [
             transforms.ToTensor(),
-            transforms.Normalize((0.1307,), (0.3081,)),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)),
         ]
     )
 
-    train_dataset = datasets.MNIST(
+    train_dataset = datasets.CIFAR10(
         root=str(data_dir),
         train=True,
         download=True,
-        transform=transform,
+        transform=train_transform,
+    )
+    val_dataset = datasets.CIFAR10(
+        root=str(data_dir),
+        train=True,
+        download=False,
+        transform=eval_transform,
     )
 
     # 从训练集切一部分做验证集
@@ -92,12 +114,14 @@ def make_loaders(
     # 用固定 seed 保证每次划分一致
     generator = torch.Generator().manual_seed(seed)
     train_subset, val_subset = random_split(train_dataset, [train_size, val_size], generator=generator)
+    train_subset = Subset(train_dataset, train_subset.indices)
+    val_subset = Subset(val_dataset, val_subset.indices)
 
-    test_dataset = datasets.MNIST(
+    test_dataset = datasets.CIFAR10(
         root=str(data_dir),
         train=False,
         download=True,
-        transform=transform,
+        transform=eval_transform,
     )
 
     # Python 字典：用 key:value 组织参数，后面通过 **loader_kwargs 展开
@@ -247,7 +271,13 @@ def build_optimizer(model: nn.Module, args):
         return torch.optim.Adam(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
     if args.optimizer == "adamw":
         return torch.optim.AdamW(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
-    return torch.optim.SGD(model.parameters(), lr=args.lr, momentum=0.9, weight_decay=args.weight_decay)
+    return torch.optim.SGD(
+        model.parameters(),
+        lr=args.lr,
+        momentum=args.momentum,
+        weight_decay=args.weight_decay,
+        nesterov=True,
+    )
 
 
 # 按参数选择学习率调度器
@@ -260,48 +290,37 @@ def build_scheduler(optimizer: torch.optim.Optimizer, args):
     return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=args.epochs, eta_min=args.min_lr)
 
 
-# 统计可训练参数量（对比 MLP/CNN 很有用）
+# 统计可训练参数量
 
 def count_parameters(model: nn.Module) -> int:
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 
-# 处理 checkpoint 路径：支持模板里的 {model}
-
-def resolve_save_path(path_template: str, model_name: str, compare_mode: bool) -> Path:
-    if "{model}" in path_template:
-        return Path(path_template.format(model=model_name))
-
-    path = Path(path_template)
-    if compare_mode:
-        return path.with_name(f"{path.stem}_{model_name}{path.suffix}")
-    return path
+def resolve_save_path(path: str) -> Path:
+    return Path(path)
 
 
-# 自动生成 run_name，便于 TensorBoard 对比
+# 自动生成 run_name，便于 TensorBoard 区分实验
 
-def resolve_run_name(args, model_name: str, compare_mode: bool) -> str:
-    base = args.run_name or f"{model_name}_e{args.epochs}_bs{args.batch_size}_lr{args.lr}_seed{args.seed}"
-    if compare_mode and args.run_name:
-        return f"{base}_{model_name}"
-    return base
+def resolve_run_name(args) -> str:
+    return args.run_name or f"cnn_e{args.epochs}_bs{args.batch_size}_lr{args.lr}_seed{args.seed}"
 
 
-# 跑一个模型（mlp 或 cnn）的完整训练+评估流程
+# 跑 CNN 的完整训练+评估流程
 
-def run_single_experiment(
+def run_experiment(
     args,
-    model_name: str,
     device: torch.device,
     train_loader: DataLoader,
     val_loader: DataLoader,
     test_loader: DataLoader,
     pin_memory: bool,
 ):
-    save_path = resolve_save_path(args.save_path, model_name, args.compare)
+    model_name = "cnn"
+    save_path = resolve_save_path(args.save_path)
     save_path.parent.mkdir(parents=True, exist_ok=True)
 
-    run_name = resolve_run_name(args, model_name, args.compare)
+    run_name = resolve_run_name(args)
     log_dir = Path(args.log_dir) / run_name
     log_dir.mkdir(parents=True, exist_ok=True)
     writer = SummaryWriter(log_dir=str(log_dir))
@@ -320,7 +339,8 @@ def run_single_experiment(
             f"batch_size={args.batch_size}, lr={args.lr}, val_ratio={args.val_ratio}, "
             f"seed={args.seed}, device={device}, optimizer={args.optimizer}, "
             f"scheduler={args.scheduler}, label_smoothing={args.label_smoothing}, "
-            f"grad_clip={args.grad_clip}, weight_decay={args.weight_decay}, dropout={args.dropout}"
+            f"grad_clip={args.grad_clip}, weight_decay={args.weight_decay}, dropout={args.dropout}, "
+            f"momentum={args.momentum}, aug={not args.no_aug}"
         ),
     )
 
@@ -343,7 +363,6 @@ def run_single_experiment(
         )
 
         val_loss, val_acc, _ = evaluate(model, val_loader, criterion, device, pin_memory)
-        test_loss, test_acc, _ = evaluate(model, test_loader, criterion, device, pin_memory)
 
         if scheduler is not None:
             scheduler.step()
@@ -353,15 +372,12 @@ def run_single_experiment(
         writer.add_scalar("epoch/train_acc", train_acc, epoch)
         writer.add_scalar("epoch/val_loss", val_loss, epoch)
         writer.add_scalar("epoch/val_acc", val_acc, epoch)
-        writer.add_scalar("epoch/test_loss", test_loss, epoch)
-        writer.add_scalar("epoch/test_acc", test_acc, epoch)
         writer.add_scalar("epoch/lr", current_lr, epoch)
 
         print(
-            f"[{model_name.upper()}] Epoch {epoch:02d}/{args.epochs} | "
+            f"[CNN] Epoch {epoch:02d}/{args.epochs} | "
             f"train_loss={train_loss:.4f} train_acc={train_acc:.4f} | "
             f"val_loss={val_loss:.4f} val_acc={val_acc:.4f} | "
-            f"test_loss={test_loss:.4f} test_acc={test_acc:.4f} | "
             f"lr={current_lr:.6f}"
         )
 
@@ -379,7 +395,7 @@ def run_single_experiment(
                 },
                 save_path,
             )
-            print(f"[{model_name.upper()}] Saved best model to: {save_path}")
+            print(f"[CNN] Saved best model to: {save_path}")
 
     # 回载最优 checkpoint，再计算一次最终测试指标
     checkpoint = torch.load(save_path, map_location=device)
@@ -415,6 +431,8 @@ def run_single_experiment(
             "grad_clip": args.grad_clip,
             "weight_decay": args.weight_decay,
             "dropout": args.dropout,
+            "momentum": args.momentum,
+            "aug": int(not args.no_aug),
         },
         {
             "hparam/best_val_acc": best_val_acc,
@@ -424,45 +442,10 @@ def run_single_experiment(
     )
     writer.close()
 
-    print(f"[{model_name.upper()}] Best val accuracy: {best_val_acc:.4f} (epoch={best_epoch})")
-    print(f"[{model_name.upper()}] Final test accuracy (best checkpoint): {final_test_acc:.4f}")
-    print(f"[{model_name.upper()}] TensorBoard log dir: {log_dir}")
-
-    # 返回 dict，主函数里再统一做比较输出
-    return {
-        "model": model_name,
-        "params": model_params,
-        "best_val_acc": best_val_acc,
-        "best_epoch": best_epoch,
-        "test_acc": final_test_acc,
-        "test_loss": final_test_loss,
-        "ckpt": str(save_path),
-        "log_dir": str(log_dir),
-    }
-
-
-# 打印 MLP/CNN 对比表
-
-def print_comparison(results):
-    print("\n" + "=" * 80)
-    print("MLP vs CNN comparison")
-    print("=" * 80)
-    print(f"{'model':<8} {'params':>12} {'best_val_acc':>14} {'test_acc':>10} {'test_loss':>10}")
-
-    for item in results:
-        print(
-            f"{item['model']:<8} {item['params']:>12d} {item['best_val_acc']:>14.4f} "
-            f"{item['test_acc']:>10.4f} {item['test_loss']:>10.4f}"
-        )
-
-    print("-" * 80)
-
-    # 字典推导式：{key: value for ... in ...}
-    by_model = {item["model"]: item for item in results}
-    if "mlp" in by_model and "cnn" in by_model:
-        delta = by_model["cnn"]["test_acc"] - by_model["mlp"]["test_acc"]
-        print(f"Delta test_acc (cnn - mlp): {delta:+.4f}")
-    print("=" * 80)
+    print(f"[CNN] Params: {model_params}")
+    print(f"[CNN] Best val accuracy: {best_val_acc:.4f} (epoch={best_epoch})")
+    print(f"[CNN] Final test accuracy (best checkpoint): {final_test_acc:.4f}")
+    print(f"[CNN] TensorBoard log dir: {log_dir}")
 
 
 def main():
@@ -481,34 +464,24 @@ def main():
         args.seed,
         args.num_workers,
         pin_memory,
+        use_aug=not args.no_aug,
     )
     print(
         f"Split sizes | train={len(train_loader.dataset)} "
         f"val={len(val_loader.dataset)} test={len(test_loader.dataset)}"
     )
 
-    # compare=True 时跑两个模型，否则只跑 args.model
-    model_order = ["mlp", "cnn"] if args.compare else [args.model]
-
-    results = []
-    for model_name in model_order:
-        print("\n" + "-" * 80)
-        print(f"Starting experiment: {model_name.upper()}")
-        print("-" * 80)
-
-        result = run_single_experiment(
-            args,
-            model_name,
-            device,
-            train_loader,
-            val_loader,
-            test_loader,
-            pin_memory,
-        )
-        results.append(result)
-
-    if args.compare:
-        print_comparison(results)
+    print("\n" + "-" * 80)
+    print("Starting experiment: CNN")
+    print("-" * 80)
+    run_experiment(
+        args,
+        device,
+        train_loader,
+        val_loader,
+        test_loader,
+        pin_memory,
+    )
 
 
 # Python 入口写法：直接运行本文件时 main() 才会执行
