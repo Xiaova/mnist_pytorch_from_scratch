@@ -1,0 +1,4 @@
+interface:
+  display_name: "CIFAR10 PyTorch Workflow"
+  short_description: "Run and maintain this CIFAR10 PyTorch training repo."
+  default_prompt: "Use this skill when modifying, running, or documenting the local CIFAR10 PyTorch training workflow."

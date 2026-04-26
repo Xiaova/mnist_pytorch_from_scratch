@@ -1,0 +1,73 @@
+---
+name: cifar10-pytorch-workflow
+description: Maintain, run, debug, and document the local CIFAR10 PyTorch training repository. Use when working on this repo's train.py, model.py, infer.py, visualize_conv1.py, environment.yml, README instructions, Anaconda dl_mnist setup, CPU/GPU device behavior, checkpoints, TensorBoard runs, CIFAR10 data files, or Git hygiene for generated ML artifacts.
+---
+
+# CIFAR10 PyTorch Workflow
+
+## Core Rules
+
+Use the repository root as the working directory. Assume commands run after:
+
+```powershell
+conda activate dl_mnist
+```
+
+Prefer CPU-compatible behavior by default. Keep `--device cpu` examples runnable on machines without NVIDIA GPUs. If adding GPU-specific options, also keep a CPU path and clearly warn that GPU or rented compute may be needed for long runs.
+
+Install dependencies with `conda` first. Use `pip` only when conda is unavailable or the package is not available from practical conda channels.
+
+## Task Flow
+
+1. Inspect the relevant entrypoint before editing.
+   - Training: `train.py`
+   - Models: `model.py`
+   - Inference: `infer.py`
+   - Conv visualization: `visualize_conv1.py`
+   - Environment: `environment.yml`
+   - Usage docs: `README.md`
+
+2. Preserve the existing command-line style.
+   - Keep argparse flags explicit and discoverable.
+   - Keep `--device` accepting `auto`, `cpu`, and `cuda` when device selection is touched.
+   - Keep automatic CUDA use guarded by `torch.cuda.is_available()`.
+   - Save checkpoints under `checkpoints/` and TensorBoard logs under `runs/` unless the user requests otherwise.
+
+3. Validate with the smallest meaningful CPU command first.
+   - Smoke training:
+
+```powershell
+python train.py --epochs 1 --batch-size 64 --device cpu
+```
+
+   - Inference:
+
+```powershell
+python infer.py --image ./inference_images/my_9.jpg --ckpt ./checkpoints/cifar10_cnn.pt --device cpu
+```
+
+   - Conv visualization:
+
+```powershell
+python visualize_conv1.py --ckpt ./checkpoints/cifar10_cnn.pt --device cpu
+```
+
+   For heavier accuracy experiments, state that CPU can be slow and recommend GPU compute.
+
+4. Treat generated ML artifacts as local outputs.
+   - Do not intentionally commit CIFAR10 archives, extracted CIFAR10 batches, TensorBoard event logs, or model checkpoints unless the user explicitly asks.
+   - Before committing or pushing, check for large files in `data/`, `checkpoints/`, and `runs/`.
+   - GitHub rejects ordinary files larger than 100 MB; `data/cifar-10-python.tar.gz` is expected to exceed that limit.
+
+## Implementation Guidance
+
+Keep edits narrow and match the existing code style. Prefer clear PyTorch primitives over adding new frameworks. Do not require GPU-only packages for default operation.
+
+When changing training behavior, verify that:
+
+- the training, validation, and test splits still work;
+- checkpoint loading remains backward compatible with both raw state dicts and checkpoint dictionaries where applicable;
+- TensorBoard logging still writes to `runs/`;
+- README commands remain accurate for `dl_mnist` and CPU use.
+
+When changing dependencies, update `environment.yml` first. If adding a pip-only fallback, document it after the conda path.
