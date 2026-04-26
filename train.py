@@ -37,6 +37,8 @@ def parse_args():
     parser.add_argument("--label-smoothing", type=float, default=0.1)
     parser.add_argument("--grad-clip", type=float, default=0.0)
     parser.add_argument("--dropout", type=float, default=0.4)
+    parser.add_argument("--mixup-alpha", type=float, default=0.2)
+    parser.add_argument("--random-erasing-prob", type=float, default=0.25)
     parser.add_argument("--momentum", type=float, default=0.9)
     parser.add_argument("--no-aug", action="store_true")
     parser.add_argument("--deterministic", action="store_true")
@@ -67,6 +69,7 @@ def make_loaders(
     num_workers: int,
     pin_memory: bool,
     use_aug: bool,
+    random_erasing_prob: float,
 ):
     if not (0.0 < val_ratio < 1.0):
         raise ValueError("--val-ratio must be in (0, 1).")
@@ -77,15 +80,23 @@ def make_loaders(
             [
                 transforms.RandomCrop(32, padding=4),
                 transforms.RandomHorizontalFlip(),
+                transforms.ColorJitter(brightness=0.15, contrast=0.15, saturation=0.15),
             ]
+        )
+
+    train_transform_steps.extend(
+        [
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)),
+        ]
+    )
+    if use_aug and random_erasing_prob > 0:
+        train_transform_steps.append(
+            transforms.RandomErasing(p=random_erasing_prob, scale=(0.02, 0.12), ratio=(0.3, 3.3), value=0)
         )
 
     train_transform = transforms.Compose(
         train_transform_steps
-        + [
-            transforms.ToTensor(),
-            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2470, 0.2435, 0.2616)),
-        ]
     )
     eval_transform = transforms.Compose(
         [
@@ -213,6 +224,30 @@ def class_accuracy_from_confusion(confusion: torch.Tensor):
     return (per_class_correct.float() / per_class_total.float()).tolist()
 
 
+def mixup_batch(images: torch.Tensor, labels: torch.Tensor, alpha: float):
+    if alpha <= 0:
+        return images, labels, labels, 1.0
+
+    beta = torch.distributions.Beta(alpha, alpha)
+    lam = float(beta.sample().item())
+    index = torch.randperm(images.size(0), device=images.device)
+
+    mixed_images = lam * images + (1.0 - lam) * images[index]
+    labels_a = labels
+    labels_b = labels[index]
+    return mixed_images, labels_a, labels_b, lam
+
+
+def mixup_loss(
+    criterion: nn.Module,
+    logits: torch.Tensor,
+    labels_a: torch.Tensor,
+    labels_b: torch.Tensor,
+    lam: float,
+) -> torch.Tensor:
+    return lam * criterion(logits, labels_a) + (1.0 - lam) * criterion(logits, labels_b)
+
+
 # 一个 epoch 的训练流程
 # 经典三步：forward -> backward -> optimizer.step()
 
@@ -227,6 +262,7 @@ def train_one_epoch(
     steps_per_epoch: int,
     grad_clip: float,
     pin_memory: bool,
+    mixup_alpha: float,
 ):
     model.train()
     running_loss = 0.0
@@ -237,10 +273,11 @@ def train_one_epoch(
     for step_idx, (images, labels) in enumerate(loader):
         images = images.to(device, non_blocking=pin_memory)
         labels = labels.to(device, non_blocking=pin_memory)
+        mixed_images, labels_a, labels_b, lam = mixup_batch(images, labels, mixup_alpha)
 
         # 1) 前向
-        logits = model(images)
-        loss = criterion(logits, labels)
+        logits = model(mixed_images)
+        loss = mixup_loss(criterion, logits, labels_a, labels_b, lam)
 
         # 2) 反向
         optimizer.zero_grad(set_to_none=True)
@@ -253,7 +290,10 @@ def train_one_epoch(
         optimizer.step()
 
         running_loss += loss.item() * labels.size(0)
-        total_correct += (logits.argmax(dim=1) == labels).sum().item()
+        predictions = logits.argmax(dim=1)
+        batch_correct = lam * (predictions == labels_a).sum().item()
+        batch_correct += (1.0 - lam) * (predictions == labels_b).sum().item()
+        total_correct += batch_correct
         total_samples += labels.size(0)
 
         global_step = (epoch - 1) * steps_per_epoch + step_idx
@@ -340,7 +380,8 @@ def run_experiment(
             f"seed={args.seed}, device={device}, optimizer={args.optimizer}, "
             f"scheduler={args.scheduler}, label_smoothing={args.label_smoothing}, "
             f"grad_clip={args.grad_clip}, weight_decay={args.weight_decay}, dropout={args.dropout}, "
-            f"momentum={args.momentum}, aug={not args.no_aug}"
+            f"momentum={args.momentum}, mixup_alpha={args.mixup_alpha}, "
+            f"random_erasing_prob={args.random_erasing_prob}, aug={not args.no_aug}"
         ),
     )
 
@@ -360,6 +401,7 @@ def run_experiment(
             steps_per_epoch,
             args.grad_clip,
             pin_memory,
+            args.mixup_alpha if not args.no_aug else 0.0,
         )
 
         val_loss, val_acc, _ = evaluate(model, val_loader, criterion, device, pin_memory)
@@ -431,6 +473,8 @@ def run_experiment(
             "grad_clip": args.grad_clip,
             "weight_decay": args.weight_decay,
             "dropout": args.dropout,
+            "mixup_alpha": args.mixup_alpha,
+            "random_erasing_prob": args.random_erasing_prob,
             "momentum": args.momentum,
             "aug": int(not args.no_aug),
         },
@@ -465,6 +509,7 @@ def main():
         args.num_workers,
         pin_memory,
         use_aug=not args.no_aug,
+        random_erasing_prob=args.random_erasing_prob,
     )
     print(
         f"Split sizes | train={len(train_loader.dataset)} "

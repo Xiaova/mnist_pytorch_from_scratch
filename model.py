@@ -1,78 +1,96 @@
-﻿import torch
+import torch
 import torch.nn as nn
 
 
-# CNN 版本：更擅长图像任务（利用局部卷积核提取空间特征）
-class CIFAR10CNN(nn.Module):
-    # dropout: float = 0.3 是 Python 的“类型标注 + 默认参数”写法
-    # 含义：参数 dropout 预期是 float，不传时默认 0.3
-    def __init__(self, dropout: float = 0.3) -> None:
-        super().__init__()  # 调用父类的构造函数，父类：nn.Module
+class ResidualBlock(nn.Module):
+    def __init__(self, in_channels: int, out_channels: int, stride: int = 1, dropout: float = 0.0) -> None:
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
+        self.bn1 = nn.BatchNorm2d(out_channels)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = nn.Conv2d(out_channels, out_channels, kernel_size=3, padding=1, bias=False)
+        self.bn2 = nn.BatchNorm2d(out_channels)
+        self.dropout = nn.Dropout2d(p=dropout) if dropout > 0 else nn.Identity()
 
-        # 更深的卷积主干更适合 CIFAR10 这类彩色自然图像。
-        # 输入形状 [B, 3, 32, 32] -> 输出形状 [B, 256, 4, 4]
+        if stride != 1 or in_channels != out_channels:
+            self.shortcut = nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False),
+                nn.BatchNorm2d(out_channels),
+            )
+        else:
+            self.shortcut = nn.Identity()
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        identity = self.shortcut(x)
+
+        out = self.conv1(x)
+        out = self.bn1(out)
+        out = self.relu(out)
+        out = self.dropout(out)
+        out = self.conv2(out)
+        out = self.bn2(out)
+
+        out = out + identity
+        out = self.relu(out)
+        return out
+
+
+# CNN version for CIFAR10 image classification.
+class CIFAR10CNN(nn.Module):
+    def __init__(self, dropout: float = 0.3) -> None:
+        super().__init__()
+
+        block_dropout = min(dropout, 0.2)
+
+        # Lightweight ResNet-style backbone.
+        # Input [B, 3, 32, 32] -> output [B, 384, 4, 4].
         self.features = nn.Sequential(
-            nn.Conv2d(3, 64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
+            nn.Conv2d(3, 48, kernel_size=3, padding=1, bias=False),
+            nn.BatchNorm2d(48),
             nn.ReLU(inplace=True),
-            nn.Conv2d(64, 64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2),
-            nn.Conv2d(64, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(128, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2),
-            nn.Conv2d(128, 256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            nn.Conv2d(256, 256, kernel_size=3, padding=1),
-            nn.BatchNorm2d(256),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(kernel_size=2),
+            ResidualBlock(48, 48, stride=1, dropout=block_dropout),
+            ResidualBlock(48, 48, stride=1, dropout=block_dropout),
+            ResidualBlock(48, 96, stride=2, dropout=block_dropout),
+            ResidualBlock(96, 96, stride=1, dropout=block_dropout),
+            ResidualBlock(96, 192, stride=2, dropout=block_dropout),
+            ResidualBlock(192, 192, stride=1, dropout=block_dropout),
+            ResidualBlock(192, 384, stride=2, dropout=block_dropout),
+            ResidualBlock(384, 384, stride=1, dropout=block_dropout),
         )
 
-        # 自适应池化让分类头更稳健，也减少全连接层参数量。
         self.classifier = nn.Sequential(
             nn.AdaptiveAvgPool2d((1, 1)),
             nn.Flatten(),
-            nn.Linear(256, 128),
+            nn.Linear(384, 256),
             nn.ReLU(inplace=True),
             nn.Dropout(p=dropout),
-            nn.Linear(128, 10),
+            nn.Linear(256, 10),
         )
 
         self._init_weights()
 
     def _init_weights(self) -> None:
-        # self.modules() 会迭代“当前模型中的所有子模块”
         for module in self.modules():
-            # isinstance(x, (A, B))：判断 x 是否是 A 或 B 的实例
             if isinstance(module, (nn.Conv2d, nn.Linear)):
                 nn.init.kaiming_normal_(module.weight, nonlinearity="relu")
-                # is not None：Python 中判断“不是空值”
                 if module.bias is not None:
                     nn.init.zeros_(module.bias)
+            elif isinstance(module, nn.BatchNorm2d):
+                nn.init.ones_(module.weight)
+                nn.init.zeros_(module.bias)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # forward 定义了“数据流动路径”
         x = self.features(x)
         x = self.classifier(x)
         return x
 
 
-# 工厂函数：保留接口形式，但仅支持 cnn
-
 def build_model(model_name: str = "cnn", dropout: float = 0.3) -> nn.Module:
-    # .lower() 把字符串转小写，避免用户传 "CNN" / "Cnn" 这种大小写差异
     if model_name.lower() != "cnn":
         raise ValueError(f"Unknown model: {model_name}. This project now supports only: cnn")
     return CIFAR10CNN(dropout=dropout)
 
 
-# 向后兼容别名（避免旧导入路径报错）
+# Backward-compatible aliases for old imports.
 MNISTCNN = CIFAR10CNN
 MNISTNet = CIFAR10CNN
