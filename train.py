@@ -28,6 +28,9 @@ def parse_args():
     parser.add_argument("--num-workers", type=int, default=0)
     parser.add_argument("--log-dir", type=str, default="./runs")
     parser.add_argument("--run-name", type=str, default="")
+    parser.add_argument("--limit-train-samples", type=int, default=0)
+    parser.add_argument("--limit-val-samples", type=int, default=0)
+    parser.add_argument("--limit-test-samples", type=int, default=0)
     parser.add_argument("--device", type=str, default="auto", choices=["auto", "cpu", "cuda"])
     parser.add_argument("--optimizer", type=str, default="sgd", choices=["adam", "adamw", "sgd"])
     parser.add_argument("--weight-decay", type=float, default=5e-4)
@@ -70,6 +73,9 @@ def make_loaders(
     pin_memory: bool,
     use_aug: bool,
     random_erasing_prob: float,
+    limit_train_samples: int,
+    limit_val_samples: int,
+    limit_test_samples: int,
 ):
     if not (0.0 < val_ratio < 1.0):
         raise ValueError("--val-ratio must be in (0, 1).")
@@ -128,12 +134,16 @@ def make_loaders(
     train_subset = Subset(train_dataset, train_subset.indices)
     val_subset = Subset(val_dataset, val_subset.indices)
 
+    train_subset = limit_dataset(train_subset, limit_train_samples, seed)
+    val_subset = limit_dataset(val_subset, limit_val_samples, seed)
+
     test_dataset = datasets.CIFAR10(
         root=str(data_dir),
         train=False,
         download=True,
         transform=eval_transform,
     )
+    test_dataset = limit_dataset(test_dataset, limit_test_samples, seed)
 
     # Python 字典：用 key:value 组织参数，后面通过 **loader_kwargs 展开
     loader_kwargs = {
@@ -150,6 +160,19 @@ def make_loaders(
     val_loader = DataLoader(val_subset, shuffle=False, **loader_kwargs)
     test_loader = DataLoader(test_dataset, shuffle=False, **loader_kwargs)
     return train_loader, val_loader, test_loader
+
+
+def limit_dataset(dataset, limit: int, seed: int):
+    if limit < 0:
+        raise ValueError("sample limits must be greater than or equal to 0.")
+    if limit == 0 or limit >= len(dataset):
+        return dataset
+    if limit < 1:
+        raise ValueError("sample limits must be 0 for full data or at least 1.")
+
+    generator = torch.Generator().manual_seed(seed)
+    indices = torch.randperm(len(dataset), generator=generator)[:limit].tolist()
+    return Subset(dataset, indices)
 
 
 # 设备选择：auto 时，有 CUDA 用 CUDA，否则用 CPU
@@ -510,6 +533,9 @@ def main():
         pin_memory,
         use_aug=not args.no_aug,
         random_erasing_prob=args.random_erasing_prob,
+        limit_train_samples=args.limit_train_samples,
+        limit_val_samples=args.limit_val_samples,
+        limit_test_samples=args.limit_test_samples,
     )
     print(
         f"Split sizes | train={len(train_loader.dataset)} "

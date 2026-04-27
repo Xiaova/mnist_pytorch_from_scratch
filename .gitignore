@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+
+# Local datasets and generated ML outputs.
+data/
+checkpoints/
+runs/
+
+# Local editor and OS state.
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

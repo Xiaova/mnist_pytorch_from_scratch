@@ -49,6 +49,31 @@ conda install pytorch torchvision tensorboard pillow -c pytorch
 # 备选：pip install -r requirements.txt
 ```
 
+### 3.1 Codex Cloud 运行
+
+Codex Cloud 中同样优先使用 conda 环境：
+
+```bash
+conda env create -f environment.yml
+conda activate dl_mnist
+```
+
+如果 Codex Cloud 镜像没有 conda，再使用 pip 备选：
+
+```bash
+pip install -r requirements.txt
+```
+
+建议先跑 CPU smoke，避免云端任务因为完整 CIFAR10 训练耗时过长：
+
+```bash
+python train.py --epochs 1 --batch-size 32 --device cpu --no-aug --limit-train-samples 256 --limit-val-samples 64 --limit-test-samples 64 --run-name codex_cloud_smoke --save-path ./checkpoints/codex_cloud_smoke.pt
+```
+
+该命令会自动下载 CIFAR10 到 `./data`，并把 checkpoint 和 TensorBoard 日志写入 `./checkpoints` 与 `./runs`。这些目录属于生成产物，默认不提交到 Git。
+
+如果要在 Codex Cloud 做完整训练，建议使用 GPU 环境；CPU 下 `50` epoch 的 CIFAR10 训练会明显更慢。
+
 ## 4. 训练用法
 
 训练 CNN：
